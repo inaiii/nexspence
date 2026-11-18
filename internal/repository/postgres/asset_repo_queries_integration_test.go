@@ -944,7 +944,7 @@ func TestAssetRepoQueries_ListStale_RetainNVersions_Zero_AllCandidates(t *testin
 	}
 
 	// retainNVersions=0 → no retention exclusion → all 4 are candidates
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 0, 100)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -980,7 +980,7 @@ func TestAssetRepoQueries_ListStale_RetainNVersions_Two_ExcludesNewest(t *testin
 	}
 
 	// retainNVersions=2 → 2 newest excluded by CTE → 2 older ones are stale
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 2, 100)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 2, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1015,7 +1015,7 @@ func TestAssetRepoQueries_ListStale_RetainNVersions_ExceedsCount_AllProtected(t 
 		}
 	}
 
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 10, 100)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 10, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1046,7 +1046,7 @@ func TestAssetRepoQueries_ListStale_FormatFilter(t *testing.T) {
 	}
 
 	// format="npm" should not match maven2 component
-	assets, err := repo.ListStale(ctx, "npm", []string{p.RepoName}, 0, 0, "", "", 0, 100)
+	assets, err := repo.ListStale(ctx, "npm", []string{p.RepoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale npm: %v", err)
 	}
@@ -1055,7 +1055,7 @@ func TestAssetRepoQueries_ListStale_FormatFilter(t *testing.T) {
 	}
 
 	// format="maven2" should match
-	assets, err = repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 0, 100)
+	assets, err = repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale maven2: %v", err)
 	}
@@ -1089,7 +1089,7 @@ func TestAssetRepoQueries_ListStale_PathPrefixFilter(t *testing.T) {
 		}
 	}
 
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "/com/", "", 0, 100)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "/com/", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1129,7 +1129,7 @@ func TestAssetRepoQueries_ListStale_NameGlobFilter(t *testing.T) {
 	}
 
 	// glob "mylib*" → LIKE "mylib%" matches "mylib-stale_glob-1.0.jar" only
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "mylib*", 0, 100)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "mylib*", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1138,7 +1138,7 @@ func TestAssetRepoQueries_ListStale_NameGlobFilter(t *testing.T) {
 	}
 
 	// glob "*.jar" → LIKE "%.jar" matches both
-	assets, err = repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "*.jar", 0, 100)
+	assets, err = repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "*.jar", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale *.jar: %v", err)
 	}
@@ -1172,7 +1172,7 @@ func TestAssetRepoQueries_ListStale_LimitRespected(t *testing.T) {
 		}
 	}
 
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 0, 3)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 0, 3)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1203,7 +1203,7 @@ func TestAssetRepoQueries_ListStale_DefaultLimitOnZero(t *testing.T) {
 	}
 
 	// limit=0 → code defaults to 500
-	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", 0, 0)
+	assets, err := repo.ListStale(ctx, "maven2", []string{p.RepoName}, 0, 0, "", "", "", 0, 0)
 	if err != nil {
 		t.Fatalf("ListStale limit=0: %v", err)
 	}
@@ -1234,7 +1234,7 @@ func TestAssetRepoQueries_ListStale_WildcardFormat(t *testing.T) {
 	}
 
 	// format="*" = wildcard (all formats)
-	assets, err := repo.ListStale(ctx, "*", []string{p.RepoName}, 0, 0, "", "", 0, 100)
+	assets, err := repo.ListStale(ctx, "*", []string{p.RepoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale *: %v", err)
 	}
@@ -1250,7 +1250,7 @@ func TestAssetRepoQueries_ListStale_EmptyRepoNames_ReturnsEmpty(t *testing.T) {
 	repo := NewAssetRepo(pool)
 
 	// No repo names provided → WHERE clause has no repo filter → empty result
-	assets, err := repo.ListStale(ctx, "*", []string{}, 0, 0, "", "", 0, 100)
+	assets, err := repo.ListStale(ctx, "*", []string{}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale empty repos: %v", err)
 	}
@@ -1595,7 +1595,7 @@ func TestAssetRepoQueries_ListStale_HostedOCI_OnlyTagManifests(t *testing.T) {
 	repoName := makeOCIImageRepo(t, ctx, "hosted", domain.TypeHosted)
 	repo := NewAssetRepo(pool)
 
-	all, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", 0, 100)
+	all, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}
@@ -1603,7 +1603,7 @@ func TestAssetRepoQueries_ListStale_HostedOCI_OnlyTagManifests(t *testing.T) {
 		t.Errorf("no retention: candidates = %s, want %s", got, want)
 	}
 
-	retain1, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", 1, 100)
+	retain1, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", "", 1, 100)
 	if err != nil {
 		t.Fatalf("ListStale retain 1: %v", err)
 	}
@@ -1611,7 +1611,7 @@ func TestAssetRepoQueries_ListStale_HostedOCI_OnlyTagManifests(t *testing.T) {
 		t.Errorf("retain 1: candidates = %s, want %s", got, want)
 	}
 
-	retain2, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", 2, 100)
+	retain2, err := repo.ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", "", 2, 100)
 	if err != nil {
 		t.Fatalf("ListStale retain 2: %v", err)
 	}
@@ -1628,7 +1628,7 @@ func TestAssetRepoQueries_ListStale_ProxyOCI_LayersStayEvictable(t *testing.T) {
 	ctx := context.Background()
 	repoName := makeOCIImageRepo(t, ctx, "proxy", domain.TypeProxy)
 
-	all, err := NewAssetRepo(pool).ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", 0, 100)
+	all, err := NewAssetRepo(pool).ListStale(ctx, "docker", []string{repoName}, 0, 0, "", "", "", 0, 100)
 	if err != nil {
 		t.Fatalf("ListStale: %v", err)
 	}

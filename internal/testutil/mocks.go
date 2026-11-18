@@ -844,7 +844,7 @@ func (a *AssetRepo) SearchAssets(_ context.Context, params domain.SearchParams) 
 	}
 	return &domain.Page[domain.Asset]{Items: items}, nil
 }
-func (a *AssetRepo) ListStale(_ context.Context, _ string, _ []string, _, _ int, _, _ string, retainNVersions int, limit int) ([]domain.Asset, error) {
+func (a *AssetRepo) ListStale(_ context.Context, _ string, _ []string, _, _ int, _, _, _ string, retainNVersions int, limit int) ([]domain.Asset, error) {
 	a.mu.Lock()
 	a.LastRetainN = retainNVersions
 	a.ListStaleCalls++

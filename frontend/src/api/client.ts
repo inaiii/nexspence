@@ -443,10 +443,10 @@ export const nexusApi = {
   getStatus: () => apiClient.get('/service/rest/v1/status'),
 
   // Browse — path tree for content selector dropdowns
-  listPathTree: (repoName: string, q?: string) =>
+  listPathTree: (repoName: string, q?: string, purpose?: 'cleanup') =>
     apiClient.get<{ paths: string[] }>(
       `/api/v1/browse/repositories/${encodeURIComponent(repoName)}/path-tree`,
-      { params: q ? { q } : {} },
+      { params: { ...(q ? { q } : {}), ...(purpose ? { purpose } : {}) } },
     ),
 }
 

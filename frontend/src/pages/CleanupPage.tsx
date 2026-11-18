@@ -39,6 +39,7 @@ interface PolicyForm {
   artifactAgeDays: string
   pathPrefix: string
   nameGlob: string
+  nameRegex: string
   scheduleCron: string
   retainNVersions: string
   scopeRepository: string
@@ -59,7 +60,7 @@ const emptyForm = (): PolicyForm => ({
   name: '', description: '', format: '*',
   enabled: true, dryRun: false,
   lastDownloadedDays: '', artifactAgeDays: '',
-  pathPrefix: '', nameGlob: '',
+  pathPrefix: '', nameGlob: '', nameRegex: '',
   scheduleCron: '',
   retainNVersions: '',
   scopeRepository: '',
@@ -85,8 +86,8 @@ function PathBrowserModal({ repoName, current, onSelect, onClose }: {
   const [filter, setFilter] = useState('')
 
   const { data, isLoading, isError } = useQuery<{ paths: string[] }>({
-    queryKey: ['pathTree', repoName],
-    queryFn: () => nexusApi.listPathTree(repoName).then(r => r.data),
+    queryKey: ['pathTree', repoName, 'cleanup'],
+    queryFn: () => nexusApi.listPathTree(repoName, undefined, 'cleanup').then(r => r.data),
   })
 
   const paths = data?.paths ?? []
@@ -291,6 +292,7 @@ function PolicyModal({
       artifactAgeDays: String(initial.criteria?.artifactAgeDays ?? ''),
       pathPrefix: String(initial.criteria?.pathPrefix ?? ''),
       nameGlob: String(initial.criteria?.nameGlob ?? ''),
+      nameRegex: String(initial.criteria?.nameRegex ?? ''),
       scheduleCron: initial.scheduleCron ?? '',
       retainNVersions: String(initial.retainNVersions ?? ''),
       scopeRepository: initial.scope?.repositoryName ?? '',
@@ -325,6 +327,7 @@ function PolicyModal({
       ...(form.artifactAgeDays ? { artifactAgeDays: Number(form.artifactAgeDays) } : {}),
       ...(form.pathPrefix.trim() ? { pathPrefix: form.pathPrefix.trim() } : {}),
       ...(form.nameGlob.trim() ? { nameGlob: form.nameGlob.trim() } : {}),
+      ...(form.nameRegex ? { nameRegex: form.nameRegex } : {}),
     },
     scope: {
       ...(form.scopeRepository ? { repositoryName: form.scopeRepository } : {}),
@@ -352,6 +355,21 @@ function PolicyModal({
 
   const LABEL = { fontSize: 12, fontWeight: 600 as const, color: 'var(--holo-text-dim)', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }
 
+  const regexField = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: '1 / -1' }}>
+      <label style={LABEL}>Asset path regex (Go regexp)</label>
+      <HoloInput aria-label="Asset path regex" value={form.nameRegex} onChange={set('nameRegex')}
+        placeholder={'^/manifests/team/app/[0-9]+\\.[0-9]+$'} />
+      <span style={{ fontSize: 11, color: 'var(--holo-text-faint)' }}>
+        Searches the complete stored asset path, ANDed with glob. Use ^ and $ for boundaries.
+        Go regexp syntax; no lookaround or backreferences. Invalid patterns are rejected on save.
+        For registry.example.com/team/app:0.1 the path is /manifests/team/app/0.1.
+        Maven uses paths such as /com/example/lib/1.0/lib-1.0.jar; other formats use their stored asset paths.
+        Copy the exact path from Preview. Neither field matches only the component name or tag.
+      </span>
+    </div>
+  )
+
   // Scope section — shared between wizard and edit modal. Shown for all formats
   // (including '*') so a clear-all policy can be pinned to a repository.
   const scopeSection = (
@@ -368,7 +386,7 @@ function PolicyModal({
         <label style={LABEL}>Target repository</label>
         <Select
           options={[
-            { value: '', label: '— All repositories —' },
+            { value: '', label: '— Attached repositories —' },
             ...filteredRepos.map(r => ({
               value: r.name,
               label: r.name,
@@ -378,7 +396,7 @@ function PolicyModal({
             })),
           ]}
           value={form.scopeRepository}
-          onChange={v => setForm(f => ({ ...f, scopeRepository: v, scopePath: v ? f.scopePath : '' }))}
+          onChange={v => setForm(f => ({ ...f, scopeRepository: v, scopePath: '' }))}
         />
         {form.scopeRepository && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
@@ -410,7 +428,7 @@ function PolicyModal({
           <HoloInput
             value={form.scopePath}
             onChange={set('scopePath')}
-            placeholder="e.g. /releases/ (leave empty for all paths)"
+            placeholder="e.g. /manifests/team/app/ (empty uses criteria)"
             disabled={!form.scopeRepository}
             style={{ flex: 1 }}
           />
@@ -423,7 +441,7 @@ function PolicyModal({
           </HoloButton>
         </div>
         <span style={{ fontSize: 11, color: 'var(--holo-tx-fg-35)' }}>
-          Leave empty to match all paths in the repository.
+          Literal internal asset path prefix. When set with a target repository, this overrides the criteria prefix; otherwise the criteria prefix applies. Other filters still apply.
         </span>
       </div>
 
@@ -510,8 +528,8 @@ function PolicyModal({
             <HoloInput value={form.pathPrefix} onChange={set('pathPrefix')} placeholder="e.g. /releases/" />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={LABEL}>Name glob</label>
-            <HoloInput value={form.nameGlob} onChange={set('nameGlob')} placeholder="e.g. *-SNAPSHOT*" />
+            <label style={LABEL}>Name glob (full asset path: * and ?)</label>
+            <HoloInput value={form.nameGlob} onChange={set('nameGlob')} placeholder="e.g. /com/example/*-SNAPSHOT/*.jar" />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: '1 / -1' }}>
             <label style={LABEL}>Retain N newest versions</label>
@@ -519,6 +537,7 @@ function PolicyModal({
             <span style={{ fontSize: 11, color: 'var(--holo-tx-fg-35)' }}>Keep the N most recent versions of each artifact even if they match other criteria.</span>
           </div>
         </div>
+        {regexField}
         {scopeSection}
       </div>
     )
@@ -652,12 +671,12 @@ function PolicyModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={LABEL}>Path prefix</label>
             <HoloInput value={form.pathPrefix}
-              onChange={set('pathPrefix')} placeholder="e.g. com/example/" />
+              onChange={set('pathPrefix')} placeholder="e.g. /com/example/" />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={LABEL}>Name glob</label>
+            <label style={LABEL}>Name glob (full asset path: * and ?)</label>
             <HoloInput value={form.nameGlob}
-              onChange={set('nameGlob')} placeholder="e.g. *.jar or *-SNAPSHOT*" />
+              onChange={set('nameGlob')} placeholder="e.g. /com/example/*-SNAPSHOT/*.jar" />
           </div>
         </div>
 
@@ -667,6 +686,7 @@ function PolicyModal({
           <span style={{ fontSize: 11, color: 'var(--holo-tx-fg-35)' }}>Keep the N most recent versions of each artifact even if they match other criteria.</span>
         </div>
 
+        {regexField}
         {scopeSection}
 
         {err && <div role="alert" style={{ fontSize: 12, color: 'var(--holo-red)', display: 'flex', gap: 6, alignItems: 'center' }}><AlertCircle size={13} />{err}</div>}
@@ -799,6 +819,7 @@ export default function CleanupPage() {
               p.criteria?.artifactAgeDays && `age >${p.criteria.artifactAgeDays}d`,
               p.criteria?.pathPrefix && `path: ${p.criteria.pathPrefix}`,
               p.criteria?.nameGlob && `glob: ${p.criteria.nameGlob}`,
+              p.criteria?.nameRegex && `regex: ${p.criteria.nameRegex}`,
               p.retainNVersions && p.retainNVersions > 0 && `retain ≥${p.retainNVersions}`,
             ].filter(Boolean) as string[]
 

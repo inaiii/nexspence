@@ -979,12 +979,26 @@ function GuideCleanupPolicies() {
       />
       <hr className={styles.divider} />
       <Step num={3} title="Set cleanup criteria"
-        text="On the Criteria step, configure one or more rules. An artifact is a deletion candidate if it matches ANY enabled criterion (set to 0 to disable):"
-        code={{ lang: 'text', content: `Last Downloaded  — delete if not downloaded in N days\nLast Modified    — delete if not updated in N days\nRetain N Versions — keep only the N newest versions per artifact name\n                    (older versions are deleted regardless of age)` }}
+        text="Enabled criteria are combined with AND. Glob and regex match the full stored asset path, not the component name, image reference or tag alone. Preview shows those exact paths. A scoped repository replaces attached repositories; its nonempty path prefix overrides the criteria prefix. An empty scope prefix falls back to the criteria prefix."
+        code={{ lang: 'text', content: `Last Downloaded  — delete if not downloaded in N days\nArtifact Age     — delete if created more than N days ago\nRetain N Versions — keep only the N newest versions per artifact name\n                    (retained versions are protected from other criteria)` }}
       />
       <hr className={styles.divider} />
+      <p>
+        For registry.example.com/team/app:0.1, the stored manifest path is /manifests/team/app/0.1.
+        Cleanup Browse returns /manifests/team/app/; content selectors use /team/app/ instead.
+        Existing cleanup scopes saved as /team/app/ must be selected again.
+        Maven paths look like /com/example/lib/1.0/lib-1.0.jar; other formats use their stored asset paths.
+        Name glob supports * (any characters) and ? (one character), including slashes.
+        Asset path regex uses Go regexp (RE2-style), case-sensitive substring search; anchor with ^ and $.
+        Lookaround and backreferences are unsupported. This is not a claim of Nexus Java regex compatibility.
+        Invalid regex is rejected on save. Both glob and regex apply when provided together.
+      </p>
+      <pre>{String.raw`Major: ^/manifests/.+/[0-9]+$
+Minor: ^/manifests/.+/[0-9]+\.[0-9]+$
+Patch: ^/manifests/.+/[0-9]+\.[0-9]+\.[0-9]+$
+These exclude latest, nightly and prereleases; dots in image names do not affect the final tag segment.`}</pre>
       <Step num={4} title="Set a schedule"
-        text='On the Schedule step, enter a cron expression for automatic runs. Leave blank to run manually only.'
+        text='On the Schedule step, enter a cron expression for automatic runs. Leave blank to use the global default schedule.'
         code={{ lang: 'text', content: `0 2 * * *    — daily at 2:00 AM\n0 3 * * 0    — every Sunday at 3:00 AM\n0 0 1 * *    — first of every month at midnight` }}
       />
       <hr className={styles.divider} />

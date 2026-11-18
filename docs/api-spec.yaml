@@ -217,14 +217,23 @@ components:
       properties:
         name:        { type: string }
         format:      { type: string }
-        notes:       { type: string }
+        description: { type: string }
+        enabled:     { type: boolean }
+        dryRun:      { type: boolean }
         criteria:
           type: object
+          description: "Enabled filters are combined with AND; path fields match assets.path."
           properties:
-            lastBlobUpdated:    { type: integer, description: "days" }
-            lastDownloaded:     { type: integer, description: "days" }
-            preRelease:         { type: string, enum: [RELEASES, PRERELEASES, "*"] }
-            regexKey:           { type: string }
+            artifactAgeDays:    { type: integer, description: "Days since creation; 0 disables." }
+            lastDownloadedDays: { type: integer, description: "Days since last download; never-downloaded assets qualify. 0 disables." }
+            pathPrefix: { type: string, description: "Literal prefix of the full stored asset path. Overridden by a nonempty scope.pathPrefix when scope.repositoryName is set." }
+            nameGlob: { type: string, description: "Glob against full assets.path: * matches any characters, ? one character, including slashes. Not a regex." }
+            nameRegex: { type: string, description: "Go regexp (RE2-style), at most 4096 UTF-8 bytes, case-sensitive substring search on full assets.path. Use ^ and $ to anchor. ANDed with nameGlob. No lookaround/backreferences; not Nexus Java regex compatibility. Invalid patterns or non-string values return HTTP 400 on create/update." }
+        scope:
+          type: object
+          properties:
+            repositoryName: { type: string, description: "Overrides the attached repository list. Empty uses attached repositories only." }
+            pathPrefix: { type: string, description: "Full internal asset prefix, e.g. /manifests/team/app/. With a scoped repository, nonempty overrides criteria.pathPrefix; empty falls back to it. Cleanup Browse requests path-tree?purpose=cleanup." }
         retainNVersions: { type: integer, default: 0, description: "Nexspence: keep N newest versions of each (group_id, name) even if they match other criteria. 0 = disabled." }
         scheduleCron:  { type: string, description: "Nexspence extension: cron expression" }
 

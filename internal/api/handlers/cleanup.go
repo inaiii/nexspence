@@ -94,6 +94,10 @@ func bindPolicy(c *gin.Context) (domain.CleanupPolicy, bool) {
 	if p.Criteria == nil {
 		p.Criteria = map[string]any{}
 	}
+	if _, err := domain.CleanupNameRegexp(p.Criteria); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return p, false
+	}
 	return p, true
 }
 

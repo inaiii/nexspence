@@ -362,6 +362,10 @@ func (s *CleanupService) runPolicy(ctx context.Context, p domain.CleanupPolicy, 
 	artifactAgeDays := intCriteria(p.Criteria, "artifactAgeDays")
 	pathPrefix := strCriteria(p.Criteria, "pathPrefix")
 	nameGlob := strCriteria(p.Criteria, "nameGlob")
+	nameRegex := strCriteria(p.Criteria, "nameRegex")
+	if _, err := domain.CleanupNameRegexp(p.Criteria); err != nil {
+		return nil, err
+	}
 
 	var repoNames []string
 	var err error
@@ -412,7 +416,7 @@ func (s *CleanupService) runPolicy(ctx context.Context, p domain.CleanupPolicy, 
 			aborted = true
 			break
 		}
-		stale, err := s.assets.ListStale(ctx, p.Format, repoNames, lastDownloadedDays, artifactAgeDays, pathPrefix, nameGlob, p.RetainNVersions, batchLimit)
+		stale, err := s.assets.ListStale(ctx, p.Format, repoNames, lastDownloadedDays, artifactAgeDays, pathPrefix, nameGlob, nameRegex, p.RetainNVersions, batchLimit)
 		if err != nil {
 			return nil, fmt.Errorf("cleanup: list stale assets: %w", err)
 		}
@@ -517,6 +521,10 @@ func (s *CleanupService) PreviewPolicy(ctx context.Context, id string) (*domain.
 	artifactAgeDays := intCriteria(p.Criteria, "artifactAgeDays")
 	pathPrefix := strCriteria(p.Criteria, "pathPrefix")
 	nameGlob := strCriteria(p.Criteria, "nameGlob")
+	nameRegex := strCriteria(p.Criteria, "nameRegex")
+	if _, err := domain.CleanupNameRegexp(p.Criteria); err != nil {
+		return nil, err
+	}
 
 	var repoNames []string
 	if p.Scope.RepositoryName != "" {
@@ -531,6 +539,10 @@ func (s *CleanupService) PreviewPolicy(ctx context.Context, id string) (*domain.
 		}
 	}
 
+	if len(repoNames) == 0 {
+		return &domain.CleanupPreviewResult{Assets: []domain.CleanupPreviewAsset{}}, nil
+	}
+
 	var reason string
 	switch {
 	case lastDownloadedDays > 0:
@@ -542,7 +554,7 @@ func (s *CleanupService) PreviewPolicy(ctx context.Context, id string) (*domain.
 	}
 
 	const previewLimit = 200
-	stale, err := s.assets.ListStale(ctx, p.Format, repoNames, lastDownloadedDays, artifactAgeDays, pathPrefix, nameGlob, p.RetainNVersions, previewLimit)
+	stale, err := s.assets.ListStale(ctx, p.Format, repoNames, lastDownloadedDays, artifactAgeDays, pathPrefix, nameGlob, nameRegex, p.RetainNVersions, previewLimit)
 	if err != nil {
 		return nil, fmt.Errorf("cleanup: list stale assets: %w", err)
 	}

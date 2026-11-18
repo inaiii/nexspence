@@ -70,9 +70,11 @@ type AssetRepo interface {
 	//   repoNames non-empty restricts to those repositories; empty = any repository (use with care).
 	//   pathPrefix filters assets whose path starts with that prefix (empty = no filter).
 	//   nameGlob is a glob pattern matched against the full asset path (* = any chars, ? = one char).
+	//   nameRegex is a Go regexp searched against the full asset path, ANDed with the glob.
+	//   The result limit applies AFTER all matching and retention filters.
 	// retainNVersions — when > 0, the N newest versions of each (group_id, name) are excluded from results.
 	// Hosted docker/oci blobs and digest aliases are never returned: only tag manifests are releases.
-	ListStale(ctx context.Context, format string, repoNames []string, lastDownloadedDays, artifactAgeDays int, pathPrefix, nameGlob string, retainNVersions int, limit int) ([]domain.Asset, error)
+	ListStale(ctx context.Context, format string, repoNames []string, lastDownloadedDays, artifactAgeDays int, pathPrefix, nameGlob, nameRegex string, retainNVersions int, limit int) ([]domain.Asset, error)
 	Create(ctx context.Context, a *domain.Asset) error
 	Delete(ctx context.Context, id string) error
 	// DeleteIfUnchanged deletes the row only if it is still exactly what an

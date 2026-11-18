@@ -1,0 +1,114 @@
+name: Fork images
+on:
+  push:
+    branches: [fix/cleanup-matching-multiarch]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fork-images-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    if: github.repository == 'inaiii/nexspence'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: go test -tags integration ./internal/repository/postgres -count=1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build && npm run typecheck:test && npm test -- --run
+        working-directory: frontend
+  build:
+    if: github.repository == 'inaiii/nexspence'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: inaiii/nexspence:sha-${{ github.sha }}-${{ matrix.arch }}
+          build-args: VERSION=inaiii-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/inaiii/nexspence
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=fork-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=fork-${{ matrix.arch }}
+      - name: Verify ELF and native server startup
+        run: bash scripts/test-native-image.sh "inaiii/nexspence:sha-$GITHUB_SHA-${{ matrix.arch }}" '${{ matrix.arch }}' | tee image-check.txt
+      - name: Save tested image
+        run: docker save "inaiii/nexspence:sha-$GITHUB_SHA-${{ matrix.arch }}" | gzip > image-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-${{ matrix.arch }}
+          path: |
+            image-${{ matrix.arch }}.tar.gz
+            image-check.txt
+          retention-days: 7
+  publish:
+    needs: [test, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require Docker Hub credentials
+        env:
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test "$HUB_USER" = inaiii || { echo 'Set DOCKERHUB_USERNAME=inaiii in fork Actions secrets'; exit 1; }
+          test -n "$HUB_TOKEN" || { echo 'Set DOCKERHUB_TOKEN in fork Actions secrets'; exit 1; }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: image-*
+          path: images
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish tested images and multi-platform index
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            gzip -dc "images/image-$arch/image-$arch.tar.gz" | docker load
+            docker push "inaiii/nexspence:sha-$GITHUB_SHA-$arch"
+          done
+          docker buildx imagetools create \
+            -t "inaiii/nexspence:sha-$GITHUB_SHA" \
+            -t inaiii/nexspence:cleanup-multiarch \
+            "inaiii/nexspence:sha-$GITHUB_SHA-amd64" \
+            "inaiii/nexspence:sha-$GITHUB_SHA-arm64"
+          docker buildx imagetools inspect "inaiii/nexspence:sha-$GITHUB_SHA" | tee published-index.txt
+      - name: Verify public anonymous access
+        run: |
+          docker logout
+          docker manifest inspect "inaiii/nexspence:sha-$GITHUB_SHA" > public-index.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open('public-index.json'))
+          platforms = {(m['platform']['os'], m['platform']['architecture']) for m in d['manifests']}
+          assert platforms == {('linux', 'amd64'), ('linux', 'arm64')}, platforms
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: published-index
+          path: |
+            published-index.txt
+            public-index.json

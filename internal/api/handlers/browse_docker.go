@@ -124,6 +124,15 @@ func (h *BrowseHandler) PathTree(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if c.Query("purpose") == "cleanup" {
+			manifests := raw[:0]
+			for _, p := range raw {
+				if strings.HasPrefix(p, "/manifests/") {
+					manifests = append(manifests, p)
+				}
+			}
+			raw = manifests
+		}
 		paths = dockerImageDirs(raw, q)
 	} else {
 		var err error
@@ -142,6 +151,13 @@ func (h *BrowseHandler) PathTree(c *gin.Context) {
 	paths = h.rbac.FilterPaths(ctx, stringVal(userID), stringSliceVal(roles),
 		repoName, repo.AllowAnonymous, paths)
 
+	// Authorize image-namespace paths first, then return the actual asset
+	// prefixes for cleanup. Other consumers (content selectors) keep their semantics.
+	if repo.Format.IsOCIRegistry() && c.Query("purpose") == "cleanup" {
+		for i := range paths {
+			paths[i] = "/manifests" + paths[i]
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"paths": paths})
 }
 

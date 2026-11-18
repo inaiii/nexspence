@@ -459,11 +459,41 @@ describe('CleanupPage', () => {
     fireEvent.click(checks[1])
     // change the scope repository Select (maven-hosted → maven-two), scoped to the modal
     const modal = document.querySelector('.holo-modal') as HTMLElement
-    const repoTrigger = within(modal).getAllByText('maven-hosted')[0]
+    const repoTrigger = await within(modal).findByRole('button', { name: 'maven-hosted' })
     await user.click(repoTrigger)
     await user.click(await screen.findByText('maven-two'))
     await user.click(screen.getByRole('button', { name: /Save changes/ }))
     await waitFor(() => expect(put).toBeTruthy())
+  })
+
+  it('saves the cleanup picker asset prefix and exact regex, and shows server errors', async () => {
+    let submitted: Record<string, unknown> | undefined
+    let purpose = ''
+    server.use(
+      http.get('/service/rest/v1/cleanup-policies', () => HttpResponse.json([
+        policy({ format: 'oci', scope: { repositoryName: 'images' }, criteria: {} }),
+      ])),
+      http.get('/api/v1/browse/repositories/:name/path-tree', ({ request }) => {
+        purpose = new URL(request.url).searchParams.get('purpose') ?? ''
+        return HttpResponse.json({ paths: ['/manifests/team/a.b/'] })
+      }),
+      http.put('/service/rest/v1/cleanup-policies/:id', async ({ request }) => {
+        submitted = await request.json() as Record<string, unknown>
+        return HttpResponse.json({ error: 'invalid criteria.nameRegex (Go regexp)' }, { status: 400 })
+      }),
+    )
+    renderWithProviders(<CleanupPage />)
+    await screen.findByText('delete-old-snapshots')
+    fireEvent.click(screen.getAllByTitle('Edit')[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Browse…' }))
+    fireEvent.click(await screen.findByText('/manifests/team/a.b/'))
+    fireEvent.click(screen.getByRole('button', { name: 'Select "/manifests/team/a.b/"' }))
+    expect(purpose).toBe('cleanup')
+    fireEvent.change(screen.getByLabelText('Asset path regex'), { target: { value: '[' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('invalid criteria.nameRegex')
+    expect(submitted?.criteria).toEqual({ nameRegex: '[' })
+    expect(submitted?.scope).toEqual({ repositoryName: 'images', pathPrefix: '/manifests/team/a.b/' })
   })
 
   it('filters and hovers paths in the path browser', async () => {

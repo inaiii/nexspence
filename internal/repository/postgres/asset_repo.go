@@ -212,9 +212,16 @@ func hostedOCINonTag(rep, comp, asset string) string {
 	return rep + ".type = 'hosted' AND " + comp + ".format IN ('docker', 'oci') AND " + nonTag
 }
 
-func (r *assetRepo) ListStale(ctx context.Context, format string, repoNames []string, lastDownloadedDays, artifactAgeDays int, pathPrefix, nameGlob string, retainNVersions int, limit int) ([]domain.Asset, error) {
+func (r *assetRepo) ListStale(ctx context.Context, format string, repoNames []string, lastDownloadedDays, artifactAgeDays int, pathPrefix, nameGlob, nameRegex string, retainNVersions int, limit int) ([]domain.Asset, error) {
 	if limit <= 0 {
 		limit = 500
+	}
+	matcher, err := domain.CleanupNameRegexp(map[string]any{"nameRegex": nameRegex})
+	if err != nil {
+		return nil, err
+	}
+	if len(repoNames) == 0 {
+		return []domain.Asset{}, nil
 	}
 	args := []any{}
 	i := 1
@@ -294,12 +301,17 @@ WITH retained_comps AS (
 		i++
 	}
 	where += cteExclude
-	args = append(args, limit)
-
+	// With a regexp, stream SQL candidates and apply the limit to MATCHES.
+	// Limiting candidates first can hide matches behind an older nonmatching batch.
+	limitSQL := ""
+	if matcher == nil {
+		args = append(args, limit)
+		limitSQL = fmt.Sprintf(" LIMIT $%d", i)
+	}
 	q := fmt.Sprintf(`%sSELECT %s %s
 		JOIN components comp ON comp.id = a.component_id
-		%s ORDER BY a.created_at ASC LIMIT $%d`,
-		ctePrefix, assetSelectCols, assetFromJoin, where, i)
+		%s ORDER BY a.created_at ASC, a.id ASC%s`,
+		ctePrefix, assetSelectCols, assetFromJoin, where, limitSQL)
 
 	rows, err := lockDB(ctx, r.db).Query(ctx, q, args...)
 	if err != nil {
@@ -312,7 +324,13 @@ WITH retained_comps AS (
 		if err != nil {
 			return nil, err
 		}
+		if matcher != nil && !matcher.MatchString(a.Path) {
+			continue
+		}
 		out = append(out, *a)
+		if len(out) == limit {
+			break
+		}
 	}
 	return out, rows.Err()
 }
